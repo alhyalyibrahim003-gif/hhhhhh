@@ -1,7 +1,7 @@
 // ==========================================
 // 1. رابط التطبيق (Google Apps Script)
 // ==========================================
-// 🚨 تنبيه: تأكد من تحديث هذا الرابط برابط "الإصدار الجديد" إذا تغير بعد النشر!
+// 🚨 تنبيه: تأكد من أن هذا الرابط هو رابط "الإصدار الجديد" الذي قمت بنشره للتو!
 const scriptURL = 'https://script.google.com/macros/s/AKfycbwRggzsvUTyW0s26Ve6h4tCvBmMZMBmUqGo0OiZ8-QmPt-PtyjUybW4mMLK9BN5nmnLzw/exec'; 
 
 // ==========================================
@@ -1040,7 +1040,7 @@ if (langToggleCheckbox) {
 applyProfileLanguage();
 
 // ==========================================
-// زر التبليغ (مع التقاط صورة مضغوطة للإرسال السريع)
+// زر التبليغ (الكود الجديد المدمج للتبليغ + الصورة)
 // ==========================================
 if (reportBtn) {
     reportBtn.addEventListener("click", function() {
@@ -1070,44 +1070,44 @@ if (confirmReportBtn) {
         pendingReportUser = null;
         if (reportConfirmDialog) reportConfirmDialog.classList.add('hidden');
         
+        // تغيير نص الزر أو إظهار حالة التحميل (اختياري) لمنع الضغط المتكرر
+        confirmReportBtn.disabled = true;
+
+        // 1. التقاط الصورة *قبل* إغلاق أي شيء
+        let dataURL = "";
+        if (remoteVideo && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0) {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = 640; 
+                canvas.height = 480;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
+                // استخدام جودة 0.5 (50%) لتخفيف حجم البيانات وتسريع الإرسال
+                dataURL = canvas.toDataURL('image/jpeg', 0.5); 
+            } catch (e) {
+                console.error('فشل التقاط الصورة:', e);
+            }
+        }
+
+        // 2. تجميع البيانات (التبليغ + الصورة معاً في طلب واحد)
         const formData = new FormData();
         formData.append('action', 'report');
         formData.append('reportedEmail', reportedUser.email);
+        if (dataURL) {
+            formData.append('imageData', dataURL);
+        }
         
+        // 3. الإرسال للسيرفر دفعة واحدة
         fetch(scriptURL, { method: 'POST', body: formData })
             .then(response => response.text())
             .then(result => {
-                if (result === 'Reported') {
+                confirmReportBtn.disabled = false;
+                
+                // قبول أي نتيجة تحتوي على كلمة Reported (سواء كان Reported أو Reported_With_Image)
+                if (result.includes('Reported')) {
                     alert(currentLang === 'ar' ? "تم الإبلاغ بنجاح. ستقوم الإدارة بالمراجعة." : "Reported successfully. Admin will review.");
                     
-                    // ✨ التقاط صورة من الفيديو البعيد وإرسالها بحجم أصغر وصيغة JPEG
-                    if (remoteVideo && remoteVideo.videoWidth > 0 && remoteVideo.videoHeight > 0) {
-                        try {
-                            const canvas = document.createElement('canvas');
-                            // تصغير أبعاد الصورة لتقليل حجم البيانات وجعل عملية الرفع سريعة ومضمونة
-                            canvas.width = 640; 
-                            canvas.height = 480;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(remoteVideo, 0, 0, canvas.width, canvas.height);
-                            
-                            // تحويلها لصيغة JPEG بضغط 50%
-                            const dataURL = canvas.toDataURL('image/jpeg', 0.5);
-                            
-                            const screenshotFormData = new FormData();
-                            screenshotFormData.append('action', 'save_screenshot');
-                            screenshotFormData.append('reportedEmail', reportedUser.email);
-                            screenshotFormData.append('imageData', dataURL);
-                            
-                            // إرسال الصورة في الخلفية
-                            fetch(scriptURL, { method: 'POST', body: screenshotFormData })
-                                .then(res => res.text())
-                                .then(txt => console.log('نتيجة رفع الصورة السريعة:', txt))
-                                .catch(e => console.error('فشل إرسال الصورة:', e));
-                        } catch (e) {
-                            console.error('فشل التقاط الصورة:', e);
-                        }
-                    }
-                    
+                    // 4. الآن فقط نقوم بإغلاق المكالمة بعد أن اكتمل الإرسال!
                     if (currentCall) {
                         currentCall.close();
                         if (currentConnection) currentConnection.close();
@@ -1125,6 +1125,7 @@ if (confirmReportBtn) {
                 }
             })
             .catch(error => {
+                confirmReportBtn.disabled = false;
                 console.error("Error reporting:", error);
                 alert(currentLang === 'ar' ? "حدث خطأ في الاتصال بالسيرفر." : "Connection error to the server.");
             });
